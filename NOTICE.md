@@ -21,3 +21,23 @@ When incorporating this work into your own project, you must:
 ## Source Code
 
 The original source code is available at: [https://github.com/overextended/ox_lib](https://github.com/overextended/ox_lib)
+
+# Notice
+
+This repository contains an unofficial modified/redesigned version of ox_lib.
+
+Original project:
+
+* Name: ox_lib
+* Author/maintainer: Overextended and contributors
+* License: GNU LGPL-3.0
+* Repository: overextended/ox_lib
+
+Modifications:
+
+* UI redesign
+* Styling changes
+* Frontend customization
+* Visual/theme adjustments
+
+This project is not official and is not affiliated with Overextended.

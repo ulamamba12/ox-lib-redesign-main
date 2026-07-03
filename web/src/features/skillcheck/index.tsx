@@ -1,125 +1,210 @@
-import { useRef, useState } from 'react';
-import { useNuiEvent } from '../../hooks/useNuiEvent';
-import Indicator from './indicator';
-import { fetchNui } from '../../utils/fetchNui';
+/*
+ * This file is based on ox_lib by Overextended.
+ * Original project: overextended/ox_lib
+ * License: GNU LGPL-3.0
+ *
+ * Modified by: Maulana / ulamamba12
+ * Modification: UI redesign / styling changes
+ * Date: 2026-07-04
+ */
+
+import React, { useRef, useState } from 'react';
 import { Box, createStyles } from '@mantine/core';
-import type { GameDifficulty, SkillCheckProps } from '../../typings';
+import { useNuiEvent } from '../../hooks/useNuiEvent';
+import { fetchNui } from '../../utils/fetchNui';
+import Indicator from './indicator';
 
-export const circleCircumference = 2 * 50 * Math.PI;
+type GameDifficulty =
+  | 'easy'
+  | 'medium'
+  | 'hard'
+  | {
+      areaSize: number;
+      speedMultiplier: number;
+    };
 
-const getRandomAngle = (min: number, max: number) => Math.floor(Math.random() * (max - min)) + min;
-
-const difficultyOffsets = {
-  easy: 50,
-  medium: 40,
-  hard: 25,
+type SkillCheckData = {
+  difficulty: GameDifficulty | GameDifficulty[];
+  inputs?: string[];
 };
 
-const useStyles = createStyles((theme, params: { difficultyOffset: number }) => ({
-  svg: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    r: 50,
-    width: 500,
-    height: 500,
-  },
-  track: {
-    fill: 'transparent',
-    stroke: theme.colors.dark[5],
-    strokeWidth: 8,
-    r: 50,
-    cx: 250,
-    cy: 250,
-    strokeDasharray: circleCircumference,
-    '@media (min-height: 1440px)': {
-      strokeWidth: 10,
-      r: 65,
-      strokeDasharray: 2 * 65 * Math.PI,
+export type SkillCheckState = {
+  angle: number;
+  difficultyOffset: number;
+  difficulty: GameDifficulty;
+  key: string;
+  keys?: string[];
+};
+
+const CENTER = 100;
+const RADIUS = 56;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+const difficultyOffsets = {
+  easy: 55,
+  medium: 42,
+  hard: 28,
+};
+
+const getDifficultyOffset = (difficulty: GameDifficulty) => {
+  if (typeof difficulty === 'object') return difficulty.areaSize;
+  return difficultyOffsets[difficulty];
+};
+
+const getDifficultyMultiplier = (difficulty: GameDifficulty) => {
+  if (typeof difficulty === 'object') return difficulty.speedMultiplier;
+  return 1;
+};
+
+const getRandomAngle = (min: number, max: number) => {
+  return Math.floor(Math.random() * (max - min)) + min;
+};
+
+const getRandomKey = (inputs?: string[]) => {
+  if (!inputs || inputs.length === 0) return 'e';
+  return inputs[Math.floor(Math.random() * inputs.length)].toLowerCase();
+};
+
+const getKeyLabel = (key: string) => {
+  if (key === 'space') return 'Space';
+  return key.toUpperCase();
+};
+
+const useStyles = createStyles((_theme, params: { difficultyOffset: number }) => {
+  const successLength = (CIRCUMFERENCE * params.difficultyOffset) / 360;
+
+  return {
+    wrapper: {
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      fontFamily: 'Arial, Helvetica, sans-serif',
     },
-  },
-  skillArea: {
-    fill: 'transparent',
-    stroke: theme.fn.primaryColor(),
-    strokeWidth: 8,
-    r: 50,
-    cx: 250,
-    cy: 250,
-    strokeDasharray: circleCircumference,
-    strokeDashoffset: circleCircumference - (Math.PI * 50 * params.difficultyOffset) / 180,
-    '@media (min-height: 1440px)': {
-      strokeWidth: 10,
-      r: 65,
-      strokeDasharray: 2 * 65 * Math.PI,
-      strokeDashoffset: 2 * 65 * Math.PI - (Math.PI * 65 * params.difficultyOffset) / 180,
+
+    container: {
+      position: 'relative',
+      width: 180,
+      height: 180,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-  },
-  indicator: {
-    stroke: 'red',
-    strokeWidth: 16,
-    fill: 'transparent',
-    r: 50,
-    cx: 250,
-    cy: 250,
-    strokeDasharray: circleCircumference,
-    strokeDashoffset: circleCircumference - 3,
-    '@media (min-height: 1440px)': {
-      strokeWidth: 18,
-      r: 65,
-      strokeDasharray: 2 * 65 * Math.PI,
-      strokeDashoffset: 2 * 65 * Math.PI - 5,
+
+    svg: {
+      position: 'absolute',
+      width: 180,
+      height: 180,
+      overflow: 'visible',
     },
-  },
-  button: {
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    transform: 'translate(-50%, -50%)',
-    backgroundColor: theme.colors.dark[5],
-    width: 25,
-    height: 25,
-    textAlign: 'center',
-    borderRadius: 5,
-    fontSize: 16,
-    fontWeight: 500,
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    '@media (min-height: 1440px)': {
-      width: 30,
-      height: 30,
-      fontSize: 22,
+
+    outerCircle: {
+      fill: 'transparent',
+      stroke: 'rgba(255, 226, 140, 0.55)',
+      strokeWidth: 1.8,
     },
-  },
-}));
+
+    innerCircle: {
+      fill: 'transparent',
+      stroke: 'rgba(255, 226, 140, 0.12)',
+      strokeWidth: 1.2,
+    },
+
+    track: {
+      fill: 'transparent',
+      stroke: 'rgba(20, 16, 10, 0.9)',
+      strokeWidth: 5,
+      strokeLinecap: 'round',
+    },
+
+    successAreaGlow: {
+      fill: 'transparent',
+      stroke: 'rgba(255, 215, 120, 0.35)',
+      strokeWidth: 7,
+      strokeLinecap: 'round',
+      strokeDasharray: `${successLength} ${CIRCUMFERENCE}`,
+      filter: 'drop-shadow(0 0 4px rgba(255, 215, 120, 0.55))',
+    },
+
+    successArea: {
+      fill: 'transparent',
+      stroke: '#f4d37a',
+      strokeWidth: 4.5,
+      strokeLinecap: 'round',
+      strokeDasharray: `${successLength} ${CIRCUMFERENCE}`,
+    },
+
+    successAreaCore: {
+      fill: 'transparent',
+      stroke: '#fff4c9',
+      strokeWidth: 1.5,
+      strokeLinecap: 'round',
+      strokeDasharray: `${successLength} ${CIRCUMFERENCE}`,
+    },
+
+    keyBox: {
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+      minWidth: 56,
+      height: 32,
+      padding: '0 14px',
+      borderRadius: 6,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#f0d68a',
+      fontSize: 15,
+      fontWeight: 700,
+      letterSpacing: 0.2,
+      background: 'rgba(10, 10, 10, 0.74)',
+      border: '2px solid rgba(255,255,255,0.9)',
+      boxShadow:
+        '0 0 8px rgba(0,0,0,0.45), inset 0 0 5px rgba(255,255,255,0.06)',
+      textShadow: '0 0 4px rgba(255, 220, 120, 0.35)',
+    },
+  };
+});
 
 const SkillCheck: React.FC = () => {
   const [visible, setVisible] = useState(false);
-  const dataRef = useRef<{ difficulty: GameDifficulty | GameDifficulty[]; inputs?: string[] } | null>(null);
-  const dataIndexRef = useRef<number>(0);
-  const [skillCheck, setSkillCheck] = useState<SkillCheckProps>({
-    angle: 0,
-    difficultyOffset: 50,
+
+  const dataRef = useRef<SkillCheckData | null>(null);
+  const dataIndexRef = useRef(0);
+
+  const [skillCheck, setSkillCheck] = useState<SkillCheckState>({
+    angle: -90,
+    difficultyOffset: 55,
     difficulty: 'easy',
     key: 'e',
+    keys: ['e'],
   });
-  const { classes } = useStyles({ difficultyOffset: skillCheck.difficultyOffset });
 
-  useNuiEvent('startSkillCheck', (data: { difficulty: GameDifficulty | GameDifficulty[]; inputs?: string[] }) => {
+  const { classes } = useStyles({
+    difficultyOffset: skillCheck.difficultyOffset,
+  });
+
+  const setupSkillCheck = (data: SkillCheckData, index = 0) => {
+    const difficulty = Array.isArray(data.difficulty) ? data.difficulty[index] : data.difficulty;
+    const offset = getDifficultyOffset(difficulty);
+    const key = getRandomKey(data.inputs);
+
+    setSkillCheck({
+      angle: getRandomAngle(-80, 270 - offset),
+      difficultyOffset: offset,
+      difficulty,
+      key,
+      keys: data.inputs?.map((input) => input.toLowerCase()),
+    });
+  };
+
+  useNuiEvent('startSkillCheck', (data: SkillCheckData) => {
     dataRef.current = data;
     dataIndexRef.current = 0;
-    const gameData = Array.isArray(data.difficulty) ? data.difficulty[0] : data.difficulty;
-    const offset = typeof gameData === 'object' ? gameData.areaSize : difficultyOffsets[gameData];
-    const randomKey = data.inputs ? data.inputs[Math.floor(Math.random() * data.inputs.length)] : 'e';
-    setSkillCheck({
-      angle: -90 + getRandomAngle(120, 360 - offset),
-      difficultyOffset: offset,
-      difficulty: gameData,
-      keys: data.inputs?.map((input) => input.toLowerCase()),
-      key: randomKey.toLowerCase(),
-    });
-
+    setupSkillCheck(data, 0);
     setVisible(true);
   });
 
@@ -130,59 +215,70 @@ const SkillCheck: React.FC = () => {
 
   const handleComplete = (success: boolean) => {
     if (!dataRef.current) return;
+
     if (!success || !Array.isArray(dataRef.current.difficulty)) {
       setVisible(false);
-      return fetchNui('skillCheckOver', success);
+      fetchNui('skillCheckOver', success);
+      return;
     }
 
     if (dataIndexRef.current >= dataRef.current.difficulty.length - 1) {
       setVisible(false);
-      return fetchNui('skillCheckOver', success);
+      fetchNui('skillCheckOver', true);
+      return;
     }
 
-    dataIndexRef.current++;
-    const data = dataRef.current.difficulty[dataIndexRef.current];
-    const key = dataRef.current.inputs
-      ? dataRef.current.inputs[Math.floor(Math.random() * dataRef.current.inputs.length)]
-      : 'e';
-    const offset = typeof data === 'object' ? data.areaSize : difficultyOffsets[data];
-    setSkillCheck((prev) => ({
-      ...prev,
-      angle: -90 + getRandomAngle(120, 360 - offset),
-      difficultyOffset: offset,
-      difficulty: data,
-      key: key.toLowerCase(),
-    }));
+    dataIndexRef.current += 1;
+    setupSkillCheck(dataRef.current, dataIndexRef.current);
   };
 
   return (
     <>
       {visible && (
-        <>
-          <svg className={classes.svg}>
-            {/*Circle track*/}
-            <circle className={classes.track} />
-            {/*SkillCheck area*/}
-            <circle transform={`rotate(${skillCheck.angle}, 250, 250)`} className={classes.skillArea} />
-            <Indicator
-              angle={skillCheck.angle}
-              offset={skillCheck.difficultyOffset}
-              multiplier={
-                skillCheck.difficulty === 'easy'
-                  ? 1
-                  : skillCheck.difficulty === 'medium'
-                  ? 1.5
-                  : skillCheck.difficulty === 'hard'
-                  ? 1.75
-                  : skillCheck.difficulty.speedMultiplier
-              }
-              handleComplete={handleComplete}
-              className={classes.indicator}
-              skillCheck={skillCheck}
-            />
-          </svg>
-          <Box className={classes.button}>{skillCheck.key.toUpperCase()}</Box>
-        </>
+        <Box className={classes.wrapper}>
+          <Box className={classes.container}>
+            <svg className={classes.svg} viewBox="0 0 200 200">
+              <circle className={classes.outerCircle} cx={CENTER} cy={CENTER} r={RADIUS + 12} />
+              <circle className={classes.innerCircle} cx={CENTER} cy={CENTER} r={RADIUS - 14} />
+
+              <circle className={classes.track} cx={CENTER} cy={CENTER} r={RADIUS} />
+
+              <circle
+                className={classes.successAreaGlow}
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS}
+                transform={`rotate(${skillCheck.angle} ${CENTER} ${CENTER})`}
+              />
+
+              <circle
+                className={classes.successArea}
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS}
+                transform={`rotate(${skillCheck.angle} ${CENTER} ${CENTER})`}
+              />
+
+              <circle
+                className={classes.successAreaCore}
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS}
+                transform={`rotate(${skillCheck.angle} ${CENTER} ${CENTER})`}
+              />
+
+              <Indicator
+                angle={skillCheck.angle}
+                offset={skillCheck.difficultyOffset}
+                multiplier={getDifficultyMultiplier(skillCheck.difficulty)}
+                skillCheck={skillCheck}
+                handleComplete={handleComplete}
+              />
+            </svg>
+
+            <Box className={classes.keyBox}>{getKeyLabel(skillCheck.key)}</Box>
+          </Box>
+        </Box>
       )}
     </>
   );

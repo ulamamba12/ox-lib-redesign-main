@@ -1,128 +1,153 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { SkillCheckProps } from '../../typings';
+/*
+ * This file is based on ox_lib by Overextended.
+ * Original project: overextended/ox_lib
+ * License: GNU LGPL-3.0
+ *
+ * Modified by: Maulana / ulamamba12
+ * Modification: UI redesign / styling changes
+ * Date: 2026-07-04
+ */
 
-interface Props {
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { SkillCheckState } from './index';
+
+type Props = {
   angle: number;
   offset: number;
   multiplier: number;
-  skillCheck: SkillCheckProps;
-  className: string;
+  skillCheck: SkillCheckState;
   handleComplete: (success: boolean) => void;
-}
+};
 
-const BASE_DURATION_MS = 2000;
+const CENTER = 100;
+const RADIUS = 56;
+const BASE_DURATION = 2100;
 
-const Indicator: React.FC<Props> = ({
-  angle,
-  offset,
-  multiplier,
-  handleComplete,
-  skillCheck,
-  className,
-}) => {
+const Indicator: React.FC<Props> = ({ angle, offset, multiplier, skillCheck, handleComplete }) => {
   const [indicatorAngle, setIndicatorAngle] = useState(-90);
-  const [keyPressed, setKeyPressed] = useState<false | string>(false);
+  const [keyPressed, setKeyPressed] = useState<string | false>(false);
 
-  const rafIdRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const startRef = useRef<number | null>(null);
   const completedRef = useRef(false);
 
-  const stopAnimation = () => {
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
+  const stopAnimation = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
-  };
+  }, []);
 
   const animate = useCallback(
     (time: number) => {
       if (completedRef.current) return;
 
-      if (startTimeRef.current === null) {
-        startTimeRef.current = time;
+      if (startRef.current === null) {
+        startRef.current = time;
       }
 
-      const elapsed = time - startTimeRef.current;
+      const safeMultiplier = Math.max(multiplier || 1, 0.1);
+      const duration = BASE_DURATION / safeMultiplier;
+      const progress = Math.min((time - startRef.current) / duration, 1);
 
-      const speed = Math.max(multiplier || 0, 0.0001);
-      const duration = BASE_DURATION_MS / speed;
+      const currentAngle = -90 + progress * 360;
+      setIndicatorAngle(currentAngle);
 
-      const progress = Math.min(elapsed / duration, 1);
-      const newAngle = -90 + progress * 360;
-
-      setIndicatorAngle(newAngle);
-
-      if (newAngle + 90 >= 360) {
+      if (progress >= 1) {
         completedRef.current = true;
         stopAnimation();
         handleComplete(false);
         return;
       }
 
-      rafIdRef.current = requestAnimationFrame(animate);
+      rafRef.current = requestAnimationFrame(animate);
     },
-    [multiplier, handleComplete]
+    [multiplier, stopAnimation, handleComplete]
   );
-  const keyHandler = useCallback(
-    (e: KeyboardEvent) => {
-      const capitalHetaCode = 880;
-      const isNonLatin = e.key.charCodeAt(0) >= capitalHetaCode;
-      var convKey = e.key.toLowerCase()
-      if (isNonLatin) {
-        if (e.code.indexOf('Key') === 0 && e.code.length === 4) { // i.e. 'KeyW'
-          convKey = e.code.charAt(3);
-        }
 
-        if (e.code.indexOf('Digit') === 0 && e.code.length === 6) { // i.e. 'Digit7'
-          convKey = e.code.charAt(5);
-        }
-      }
-      setKeyPressed(convKey.toLowerCase());
-    },
-    [skillCheck]
-  );
+  const normalizeKey = (e: KeyboardEvent) => {
+    if (e.code === 'Space') return 'space';
+
+    if (e.code.startsWith('Key') && e.code.length === 4) {
+      return e.code.charAt(3).toLowerCase();
+    }
+
+    if (e.code.startsWith('Digit') && e.code.length === 6) {
+      return e.code.charAt(5).toLowerCase();
+    }
+
+    return e.key.toLowerCase();
+  };
+
+  const keyHandler = useCallback((e: KeyboardEvent) => {
+    if (e.repeat) return;
+    setKeyPressed(normalizeKey(e));
+  }, []);
 
   useEffect(() => {
     setIndicatorAngle(-90);
-    startTimeRef.current = null;
+    setKeyPressed(false);
+
+    startRef.current = null;
     completedRef.current = false;
 
     window.addEventListener('keydown', keyHandler);
-    rafIdRef.current = requestAnimationFrame(animate);
+    rafRef.current = requestAnimationFrame(animate);
 
     return () => {
       stopAnimation();
       window.removeEventListener('keydown', keyHandler);
-      startTimeRef.current = null;
       completedRef.current = true;
+      startRef.current = null;
     };
-  }, [skillCheck, keyHandler, animate]);
+  }, [skillCheck, keyHandler, animate, stopAnimation]);
 
   useEffect(() => {
     if (!keyPressed || completedRef.current) return;
 
-    if (skillCheck.keys && !skillCheck.keys?.includes(keyPressed)) return;
+    if (skillCheck.keys && !skillCheck.keys.includes(keyPressed)) {
+      return;
+    }
 
+    completedRef.current = true;
     stopAnimation();
     window.removeEventListener('keydown', keyHandler);
-    completedRef.current = true;
 
-    if (keyPressed !== skillCheck.key || indicatorAngle < angle || indicatorAngle > angle + offset)
-      handleComplete(false);
-    else handleComplete(true);
+    const wrongKey = keyPressed !== skillCheck.key;
+    const tooEarly = indicatorAngle < angle;
+    const tooLate = indicatorAngle > angle + offset;
 
+    handleComplete(!(wrongKey || tooEarly || tooLate));
     setKeyPressed(false);
-  }, [
-    keyPressed,
-    angle,
-    offset,
-    indicatorAngle,
-    skillCheck,
-    keyHandler,
-    handleComplete,
-  ]);
+  }, [keyPressed, indicatorAngle, angle, offset, skillCheck, keyHandler, stopAnimation, handleComplete]);
 
-  return <circle transform={`rotate(${indicatorAngle}, 250, 250)`} className={className} />;
+  return (
+    <g transform={`rotate(${indicatorAngle} ${CENTER} ${CENTER})`}>
+      <line
+        x1={CENTER + RADIUS - 5}
+        y1={CENTER}
+        x2={CENTER + RADIUS + 20}
+        y2={CENTER}
+        stroke="rgba(255, 35, 35, 0.95)"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        style={{
+          filter: 'drop-shadow(0 0 5px rgba(255, 0, 0, 0.8))',
+        }}
+      />
+
+      <circle
+        cx={CENTER + RADIUS}
+        cy={CENTER}
+        r={4.2}
+        fill="#ff2b2b"
+        style={{
+          filter:
+            'drop-shadow(0 0 6px rgba(255, 0, 0, 1)) drop-shadow(0 0 12px rgba(255, 0, 0, 0.65))',
+        }}
+      />
+    </g>
+  );
 };
 
 export default Indicator;
