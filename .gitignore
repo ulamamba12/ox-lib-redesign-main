@@ -12,3 +12,11 @@ pnpm-debug.log*
 /web/node_modules
 /web/build
 /package/dist
+
+node_modules/
+.cache/
+dist/
+build/
+.vscode/
+.env
+*.log
