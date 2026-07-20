@@ -16,7 +16,6 @@ import ContextButton from './components/ContextButton';
 import HeaderButton from './components/HeaderButton';
 import { fetchNui } from '../../../utils/fetchNui';
 import ReactMarkdown from 'react-markdown';
-import ScaleFade from '../../../transitions/ScaleFade';
 import MarkdownComponents from '../../../config/MarkdownComponents';
 
 const openMenu = (id: string | undefined) => {
@@ -355,9 +354,10 @@ const ContextMenu: React.FC = () => {
     setVisible(true);
   });
 
+  if (!visible) return null;
+
   return (
-    <ScaleFade visible={visible}>
-      <Box className={classes.container}>
+    <Box className={classes.container}>
         <Flex className={classes.header}>
           {contextMenu.menu && (
             <HeaderButton
@@ -407,8 +407,7 @@ const ContextMenu: React.FC = () => {
             )}
           </Stack>
         </Box>
-      </Box>
-    </ScaleFade>
+    </Box>
   );
 };
 
